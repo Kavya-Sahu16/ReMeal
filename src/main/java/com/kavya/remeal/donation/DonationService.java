@@ -5,11 +5,14 @@ import com.kavya.remeal.donation.dto.DonationResponse;
 import com.kavya.remeal.user.Role;
 import com.kavya.remeal.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,6 +22,7 @@ public class DonationService {
 
     private final DonationRepository donationRepository;
 
+    // PHASE 4: CREATE DONATION
     @Transactional
     public DonationResponse createDonation(
             User user, DonationRequest request) {
@@ -30,12 +34,12 @@ public class DonationService {
         donation.setDonor(user);
 
         updateDonationFields(donation, request);
-
         donation.setStatus(DonationStatus.AVAILABLE);
 
         return mapToResponse(donationRepository.save(donation));
     }
 
+    // PHASE 4: GET MY DONATIONS
     @Transactional(readOnly = true)
     public List<DonationResponse> getMyDonations(User user) {
 
@@ -48,6 +52,7 @@ public class DonationService {
                 .toList();
     }
 
+    // PHASE 4: GET A SPECIFIC DONATION
     @Transactional(readOnly = true)
     public DonationResponse getDonation(Long id, User user) {
 
@@ -58,6 +63,7 @@ public class DonationService {
         return mapToResponse(donation);
     }
 
+    // PHASE 4: UPDATE DONATION
     @Transactional
     public DonationResponse updateDonation(
             Long id, User user, DonationRequest request) {
@@ -79,6 +85,7 @@ public class DonationService {
         return mapToResponse(donationRepository.save(donation));
     }
 
+    // PHASE 4: DELETE DONATION
     @Transactional
     public void deleteDonation(Long id, User user) {
 
@@ -96,12 +103,148 @@ public class DonationService {
         donationRepository.delete(donation);
     }
 
+    // PHASE 5: BROWSE AND FILTER DONATIONS
+    @Transactional(readOnly = true)
+    public List<DonationResponse> browseDonations(
+            User user,
+            String city,
+            DonationCategory category,
+            BigDecimal minQuantity,
+            BigDecimal maxQuantity,
+            LocalDateTime expiryFrom,
+            LocalDateTime expiryTo,
+            String foodName) {
+
+        checkRecipient(user);
+
+        // Validate quantity range
+        if (minQuantity != null && minQuantity.signum() < 0
+                || maxQuantity != null && maxQuantity.signum() < 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Quantity filters cannot be negative"
+            );
+        }
+
+        if (minQuantity != null && maxQuantity != null
+                && minQuantity.compareTo(maxQuantity) > 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Minimum quantity cannot exceed maximum quantity"
+            );
+        }
+
+        // Validate expiry range
+        if (expiryFrom != null && expiryTo != null
+                && expiryFrom.isAfter(expiryTo)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Expiry start cannot be after expiry end"
+            );
+        }
+
+        // Start with mandatory conditions
+        Specification<Donation> specification =
+                DonationSpecification
+                        .hasStatus(DonationStatus.AVAILABLE)
+                        .and(DonationSpecification
+                                .isNotExpired(LocalDateTime.now()));
+
+        // Add optional filters
+        if (city != null && !city.isBlank()) {
+            specification = specification.and(
+                    DonationSpecification.hasCity(city)
+            );
+        }
+
+        if (category != null) {
+            specification = specification.and(
+                    DonationSpecification.hasCategory(category)
+            );
+        }
+
+        if (minQuantity != null) {
+            specification = specification.and(
+                    DonationSpecification
+                            .hasMinimumQuantity(minQuantity)
+            );
+        }
+
+        if (maxQuantity != null) {
+            specification = specification.and(
+                    DonationSpecification
+                            .hasMaximumQuantity(maxQuantity)
+            );
+        }
+
+        if (expiryFrom != null) {
+            specification = specification.and(
+                    DonationSpecification.expiresAfter(expiryFrom)
+            );
+        }
+
+        if (expiryTo != null) {
+            specification = specification.and(
+                    DonationSpecification.expiresBefore(expiryTo)
+            );
+        }
+
+        if (foodName != null && !foodName.isBlank()) {
+            specification = specification.and(
+                    DonationSpecification.hasFoodName(foodName)
+            );
+        }
+
+        return donationRepository.findAll(
+                        specification,
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                )
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    // PHASE 5: VIEW AVAILABLE DONATION DETAILS
+    @Transactional(readOnly = true)
+    public DonationResponse getAvailableDonation(Long id, User user) {
+
+        checkRecipient(user);
+
+        Donation donation = donationRepository
+                .findByIdAndStatusAndExpiryDateTimeAfter(
+                        id,
+                        DonationStatus.AVAILABLE,
+                        LocalDateTime.now()
+                )
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Available donation not found"
+                ));
+
+        return mapToResponse(donation);
+    }
+
+    // COMMON METHODS
+
     private void checkDonor(User user) {
 
         if (user.getRole() != Role.DONOR) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Only donors can manage donations"
+            );
+        }
+    }
+
+    private void checkRecipient(User user) {
+
+        if (user.getRole() != Role.RECIPIENT) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only recipients can browse donations"
             );
         }
     }
