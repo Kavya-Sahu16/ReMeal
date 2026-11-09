@@ -12,9 +12,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface DonationRepository
-        extends JpaRepository<Donation, Long>,
-                JpaSpecificationExecutor<Donation> {
+public interface DonationRepository extends JpaRepository<Donation, Long>, JpaSpecificationExecutor<Donation> {
 
     List<Donation> findAllByDonorIdOrderByCreatedAtDesc(Long donorId);
 
@@ -28,4 +26,11 @@ public interface DonationRepository
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT d FROM Donation d WHERE d.id = :id")
     Optional<Donation> findByIdForUpdate(@Param("id") Long id);
+
+    long countByDonor_Id(Long donorId);
+
+        long countByDonor_IdAndStatus(
+        Long donorId,
+        DonationStatus status
+        );
 }
