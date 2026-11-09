@@ -61,4 +61,29 @@ public class DonationRequestController {
 
         return requestService.rejectRequest(id, user);
     }
+    // DONOR: ASSIGN VOLUNTEER
+    @PutMapping("/{id}/assign/{volunteerId}")
+    public RequestResponse assignVolunteer(
+            @PathVariable Long id,
+            @PathVariable Long volunteerId,
+            @AuthenticationPrincipal User user) {
+
+        return requestService.assignVolunteer(id, volunteerId, user);
+    }
+
+
+    // VOLUNTEER: VIEW ASSIGNMENTS
+    @GetMapping("/assignments")
+    public List<RequestResponse> getMyAssignments(@AuthenticationPrincipal User user) {
+
+        return requestService.getMyAssignments(user);
+    }
+
+
+    // VOLUNTEER: ACCEPT ASSIGNMENT
+    @PutMapping("/{id}/accept")
+    public RequestResponse acceptAssignment(@PathVariable Long id, @AuthenticationPrincipal User user) {
+
+        return requestService.acceptAssignment(id, user);
+    }
 }

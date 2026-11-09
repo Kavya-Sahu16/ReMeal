@@ -1,5 +1,6 @@
 package com.kavya.remeal.request.dto;
 
+import com.kavya.remeal.request.AssignmentStatus;
 import com.kavya.remeal.request.RequestStatus;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,9 @@ public record RequestResponse(
         String donorName,
         RequestStatus requestStatus,
         LocalDateTime requestedAt,
-        LocalDateTime approvedAt
+        LocalDateTime approvedAt,
+        Long volunteerId,
+        String volunteerName,
+        AssignmentStatus assignmentStatus
 ) {
 }

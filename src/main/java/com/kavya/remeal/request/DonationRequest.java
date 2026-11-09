@@ -28,6 +28,14 @@ public class DonationRequest {
     @JoinColumn(name = "recipient_id", nullable = false)
     private User recipient;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "volunteer_id")
+    private User volunteer;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AssignmentStatus assignmentStatus = AssignmentStatus.NOT_ASSIGNED;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private RequestStatus requestStatus = RequestStatus.PENDING;

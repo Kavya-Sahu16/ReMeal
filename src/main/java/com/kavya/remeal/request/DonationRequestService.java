@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import com.kavya.remeal.user.UserRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +21,7 @@ public class DonationRequestService {
 
     private final DonationRequestRepository requestRepository;
     private final DonationRepository donationRepository;
+    private final UserRepository userRepository;
 
     // RECIPIENT: REQUEST A DONATION
     @Transactional
@@ -158,6 +160,100 @@ public class DonationRequestService {
         return mapToResponse(requestRepository.save(request));
     }
 
+    // DONOR: ASSIGN VOLUNTEER
+    @Transactional
+    public RequestResponse assignVolunteer(Long requestId, Long volunteerId, User donor) {
+
+        checkDonor(donor);
+
+        DonationRequest request = findRequest(requestId);
+
+        if (!request.getDonation().getDonor().getId().equals(donor.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                "You cannot assign volunteers to another donor's request");
+        }
+
+        if (request.getRequestStatus() != RequestStatus.APPROVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Volunteer can only be assigned to approved requests");
+        }
+
+        if (request.getAssignmentStatus() != AssignmentStatus.NOT_ASSIGNED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A volunteer has already been assigned");
+        }
+
+        User volunteer = userRepository.findById(volunteerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Volunteer not found"));
+
+        if (volunteer.getRole() != Role.VOLUNTEER) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Selected user is not a volunteer");
+        }
+
+        request.setVolunteer(volunteer);
+        request.setAssignmentStatus(AssignmentStatus.ASSIGNED);
+
+        return mapToResponse(requestRepository.save(request));
+}
+
+
+    // VOLUNTEER: VIEW ASSIGNMENTS
+    @Transactional(readOnly = true)
+    public List<RequestResponse> getMyAssignments(User volunteer) {
+
+        checkVolunteer(volunteer);
+
+        return requestRepository
+                .findAllByVolunteerIdOrderByRequestedAtDesc(volunteer.getId())
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+
+// VOLUNTEER: ACCEPT ASSIGNMENT
+    @Transactional
+    public RequestResponse acceptAssignment(Long requestId, User volunteer) {
+
+        checkVolunteer(volunteer);
+
+    DonationRequest request = findRequest(requestId);
+
+        if (request.getVolunteer() == null
+                || !request.getVolunteer().getId().equals(volunteer.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "This assignment does not belong to you");
+        }
+
+        if (request.getAssignmentStatus() != AssignmentStatus.ASSIGNED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Only assigned deliveries can be accepted");
+        }
+
+        request.setAssignmentStatus(AssignmentStatus.ACCEPTED);
+
+        return mapToResponse(requestRepository.save(request));
+    }
+
+
+    // COMMON ROLE CHECK
+    private void checkVolunteer(User user) {
+
+        if (user.getRole() != Role.VOLUNTEER) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only volunteers can access this resource");
+        }
+    
+    }
     // COMMON METHODS
 
     private DonationRequest findRequest(Long id) {
@@ -217,7 +313,10 @@ public class DonationRequestService {
                 donation.getDonor().getName(),
                 request.getRequestStatus(),
                 request.getRequestedAt(),
-                request.getApprovedAt()
+                request.getApprovedAt(),
+                request.getVolunteer() != null ? request.getVolunteer().getId() : null,
+                request.getVolunteer() != null ? request.getVolunteer().getName() : null,
+                request.getAssignmentStatus()
         );
     }
 }
