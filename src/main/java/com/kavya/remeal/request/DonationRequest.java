@@ -45,6 +45,16 @@ public class DonationRequest {
 
     private LocalDateTime approvedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private DeliveryStatus deliveryStatus = DeliveryStatus.NOT_STARTED;
+
+    private LocalDateTime pickedUpAt;
+
+    private LocalDateTime deliveredAt;
+
+    private LocalDateTime confirmedAt;
+
     @PrePersist
     protected void onCreate() {
         requestedAt = LocalDateTime.now();

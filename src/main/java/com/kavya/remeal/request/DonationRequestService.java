@@ -243,6 +243,94 @@ public class DonationRequestService {
         return mapToResponse(requestRepository.save(request));
     }
 
+    // VOLUNTEER: MARK FOOD AS PICKED UP
+    @Transactional
+    public RequestResponse markPickedUp(Long requestId, User volunteer) {
+
+        checkVolunteer(volunteer);
+    
+    DonationRequest request = findRequest(requestId);
+
+    checkAssignedVolunteer(request, volunteer);
+
+        if (request.getAssignmentStatus() != AssignmentStatus.ACCEPTED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "You must accept the assignment before pickup");
+        }
+
+        if (request.getDeliveryStatus() != DeliveryStatus.NOT_STARTED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Pickup has already been processed");
+        }
+
+        request.setDeliveryStatus(DeliveryStatus.PICKED_UP);
+        request.setPickedUpAt(LocalDateTime.now());
+
+        return mapToResponse(requestRepository.save(request));
+    }
+
+    // VOLUNTEER: MARK FOOD AS DELIVERED
+    @Transactional
+    public RequestResponse markDelivered(Long requestId, User volunteer) {
+
+        checkVolunteer(volunteer);
+
+    DonationRequest request = findRequest(requestId);
+
+        checkAssignedVolunteer(request, volunteer);
+
+        if (request.getDeliveryStatus() != DeliveryStatus.PICKED_UP) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Food must be picked up before marking it delivered");
+        }
+
+        request.setDeliveryStatus(DeliveryStatus.DELIVERED);
+        request.setDeliveredAt(LocalDateTime.now());
+
+        return mapToResponse(requestRepository.save(request));
+    }
+
+    // RECIPIENT: CONFIRM FOOD RECEIPT
+    @Transactional
+    public RequestResponse confirmDelivery(Long requestId, User recipient) {
+
+        checkRecipient(recipient);
+    DonationRequest request = findRequest(requestId);
+
+        if (!request.getRecipient().getId().equals(recipient.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You cannot confirm another recipient's delivery");
+        }
+
+        if (request.getDeliveryStatus() != DeliveryStatus.DELIVERED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Delivery must be marked delivered before confirmation");
+        }
+
+        request.setDeliveryStatus(DeliveryStatus.CONFIRMED);
+        request.setConfirmedAt(LocalDateTime.now());
+
+        Donation donation = request.getDonation();
+        donation.setStatus(DonationStatus.COMPLETED);
+        donationRepository.save(donation);
+
+        return mapToResponse(requestRepository.save(request));
+    }
+
+    // CHECK WHETHER THE VOLUNTEER OWNS THIS ASSIGNMENT
+    private void checkAssignedVolunteer(DonationRequest request, User volunteer) {
+
+        if (request.getVolunteer() == null || !request.getVolunteer().getId().equals(volunteer.getId())) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "This assignment does not belong to you");
+        }
+    }
 
     // COMMON ROLE CHECK
     private void checkVolunteer(User user) {
@@ -316,7 +404,11 @@ public class DonationRequestService {
                 request.getApprovedAt(),
                 request.getVolunteer() != null ? request.getVolunteer().getId() : null,
                 request.getVolunteer() != null ? request.getVolunteer().getName() : null,
-                request.getAssignmentStatus()
+                request.getAssignmentStatus(),
+                request.getDeliveryStatus(),
+                request.getPickedUpAt(),
+                request.getDeliveredAt(),
+                request.getConfirmedAt()
         );
     }
 }
